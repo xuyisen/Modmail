@@ -137,4 +137,8 @@ config.json
 temp/
 test.py
 stack.yml
-.github/workflows/build_docker.yml
+.github/workflows/build_docker.yml# Shell redirection artifacts
+=[0-9]*
+>[0-9]*
+*.tmp
+*.log

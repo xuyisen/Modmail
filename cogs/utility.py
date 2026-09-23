@@ -1,4 +1,3 @@
-from core.utils import trigger_typing, truncate, safe_typing
 import asyncio
 import inspect
 import os
@@ -12,14 +11,12 @@ from itertools import takewhile, zip_longest
 from json import JSONDecodeError, loads
 from subprocess import PIPE
 from textwrap import indent
-from typing import Union
 
 import discord
+from aiohttp import ClientResponseError
 from discord.enums import ActivityType, Status
 from discord.ext import commands, tasks
 from discord.ext.commands.view import StringView
-
-from aiohttp import ClientResponseError
 from packaging.version import Version
 
 from core import checks, utils
@@ -31,9 +28,8 @@ from core.models import (
     UnseenFormatter,
     getLogger,
 )
-from core.utils import trigger_typing, truncate, DummyParam
 from core.paginator import EmbedPaginatorSession, MessagePaginatorSession
-
+from core.utils import DummyParam, trigger_typing, truncate
 
 logger = getLogger(__name__)
 
@@ -92,7 +88,8 @@ class ModmailHelpCommand(commands.HelpCommand):
 
             name = cog.qualified_name + " - Help" if not no_cog else "Miscellaneous Commands"
             embed.set_author(
-                name=name, icon_url=bot.user.display_avatar.url if bot.user.display_avatar else None
+                name=name,
+                icon_url=bot.user.display_avatar.url if bot.user.display_avatar else None,
             )
 
             embed.set_footer(
@@ -118,7 +115,11 @@ class ModmailHelpCommand(commands.HelpCommand):
         bot = self.context.bot
 
         # always come first
-        default_cogs = [bot.get_cog("Modmail"), bot.get_cog("Utility"), bot.get_cog("Plugins")]
+        default_cogs = [
+            bot.get_cog("Modmail"),
+            bot.get_cog("Utility"),
+            bot.get_cog("Plugins"),
+        ]
 
         default_cogs.extend(c for c in cogs if c not in default_cogs)
 
@@ -200,7 +201,9 @@ class ModmailHelpCommand(commands.HelpCommand):
 
             if snippet_aliases:
                 embed.add_field(
-                    name="Aliases to this snippet:", value=",".join(snippet_aliases), inline=False
+                    name="Aliases to this snippet:",
+                    value=",".join(snippet_aliases),
+                    inline=False,
                 )
 
             return await self.get_destination().send(embed=embed)
@@ -221,7 +224,10 @@ class ModmailHelpCommand(commands.HelpCommand):
                 await self.context.bot.config.update()
             else:
                 if len(values) == 1:
-                    embed = discord.Embed(title=f"{command} is an alias.", color=self.context.bot.main_color)
+                    embed = discord.Embed(
+                        title=f"{command} is an alias.",
+                        color=self.context.bot.main_color,
+                    )
                     embed.add_field(name=f"`{command}` points to:", value=values[0])
                 else:
                     embed = discord.Embed(
@@ -670,7 +676,7 @@ class Utility(commands.Cog):
 
     @commands.command()
     @checks.has_permissions(PermissionLevel.ADMINISTRATOR)
-    async def mention(self, ctx, *user_or_role: Union[discord.Role, discord.Member, str]):
+    async def mention(self, ctx, *user_or_role: discord.Role | discord.Member | str):
         """
         Change what the bot mentions at the start of each thread.
 
@@ -693,7 +699,9 @@ class Utility(commands.Cog):
         current = self.bot.config["mention"]
         if not user_or_role:
             embed = discord.Embed(
-                title="Current mention:", color=self.bot.main_color, description=str(current)
+                title="Current mention:",
+                color=self.bot.main_color,
+                description=str(current),
             )
         elif (
             len(user_or_role) == 1
@@ -814,7 +822,9 @@ class Utility(commands.Cog):
                 embed = exc.embed
         else:
             embed = discord.Embed(
-                title="Error", color=self.bot.error_color, description=f"{key} is an invalid key."
+                title="Error",
+                color=self.bot.error_color,
+                description=f"{key} is an invalid key.",
             )
             valid_keys = [f"`{k}`" for k in sorted(keys)]
             embed.add_field(name="Valid keys", value=truncate(", ".join(valid_keys), 1024))
@@ -836,7 +846,9 @@ class Utility(commands.Cog):
             )
         else:
             embed = discord.Embed(
-                title="Error", color=self.bot.error_color, description=f"{key} is an invalid key."
+                title="Error",
+                color=self.bot.error_color,
+                description=f"{key} is an invalid key.",
             )
             valid_keys = [f"`{k}`" for k in sorted(keys)]
             embed.add_field(name="Valid keys", value=", ".join(valid_keys))
@@ -907,7 +919,10 @@ class Utility(commands.Cog):
                 description=f"`{key}` is an invalid key.",
             )
             if closest:
-                embed.add_field(name="Perhaps you meant:", value="\n".join(f"`{x}`" for x in closest))
+                embed.add_field(
+                    name="Perhaps you meant:",
+                    value="\n".join(f"`{x}`" for x in closest),
+                )
             return await ctx.send(embed=embed)
 
         config_help = self.bot.config.config_help
@@ -998,7 +1013,9 @@ class Utility(commands.Cog):
 
             if len(values) == 1:
                 embed = discord.Embed(
-                    title=f'Alias - "{name}":', description=values[0], color=self.bot.main_color
+                    title=f'Alias - "{name}":',
+                    description=values[0],
+                    color=self.bot.main_color,
                 )
                 return await ctx.send(embed=embed)
 
@@ -1016,10 +1033,14 @@ class Utility(commands.Cog):
 
         if not self.bot.aliases:
             embed = discord.Embed(
-                color=self.bot.error_color, description="You dont have any aliases at the moment."
+                color=self.bot.error_color,
+                description="You dont have any aliases at the moment.",
             )
             embed.set_footer(text=f'Do "{self.bot.prefix}help alias" for more commands.')
-            embed.set_author(name="Aliases", icon_url=self.bot.get_guild_icon(guild=ctx.guild, size=128))
+            embed.set_author(
+                name="Aliases",
+                icon_url=self.bot.get_guild_icon(guild=ctx.guild, size=128),
+            )
             return await ctx.send(embed=embed)
 
         embeds = []
@@ -1028,7 +1049,8 @@ class Utility(commands.Cog):
             description = utils.format_description(i, names)
             embed = discord.Embed(color=self.bot.main_color, description=description)
             embed.set_author(
-                name="Command Aliases", icon_url=self.bot.get_guild_icon(guild=ctx.guild, size=128)
+                name="Command Aliases",
+                icon_url=self.bot.get_guild_icon(guild=ctx.guild, size=128),
             )
             embeds.append(embed)
 
@@ -1048,7 +1070,9 @@ class Utility(commands.Cog):
 
         val = utils.truncate(utils.escape_code_block(val), 2048 - 7)
         embed = discord.Embed(
-            title=f'Raw alias - "{name}":', description=f"```\n{val}```", color=self.bot.main_color
+            title=f'Raw alias - "{name}":',
+            description=f"```\n{val}```",
+            color=self.bot.main_color,
         )
 
         return await ctx.send(embed=embed)
@@ -1066,7 +1090,9 @@ class Utility(commands.Cog):
 
         if len(values) > 25:
             embed = discord.Embed(
-                title="Error", description="Too many steps, max=25.", color=self.bot.error_color
+                title="Error",
+                description="Too many steps, max=25.",
+                color=self.bot.error_color,
             )
             return embed
 
@@ -1310,7 +1336,7 @@ class Utility(commands.Cog):
         type_: str.lower,
         name: str,
         *,
-        user_or_role: Union[discord.Role, utils.User, str],
+        user_or_role: discord.Role | utils.User | str,
     ):
         """
         Add a permission to a command or a permission level.
@@ -1384,7 +1410,7 @@ class Utility(commands.Cog):
         type_: str.lower,
         name: str,
         *,
-        user_or_role: Union[discord.Role, utils.User, str] = None,
+        user_or_role: discord.Role | utils.User | str = None,
     ):
         """
         Remove permission to use a command, permission level, or command level override.
@@ -1513,9 +1539,7 @@ class Utility(commands.Cog):
 
     @permissions.command(name="get", usage="[@user] or [command/level/override] [name]")
     @checks.has_permissions(PermissionLevel.OWNER)
-    async def permissions_get(
-        self, ctx, user_or_role: Union[discord.Role, utils.User, str], *, name: str = None
-    ):
+    async def permissions_get(self, ctx, user_or_role: discord.Role | utils.User | str, *, name: str = None):
         """
         View the currently-set permissions.
 
@@ -1693,7 +1717,7 @@ class Utility(commands.Cog):
 
     @oauth.command(name="whitelist")
     @checks.has_permissions(PermissionLevel.OWNER)
-    async def oauth_whitelist(self, ctx, target: Union[discord.Role, utils.User]):
+    async def oauth_whitelist(self, ctx, target: discord.Role | utils.User):
         """
         Whitelist or un-whitelist a user or role to have access to logs.
 
@@ -2036,7 +2060,11 @@ class Utility(commands.Cog):
                 res = res.decode("utf-8").rstrip()
 
                 if err and not res:
-                    embed = discord.Embed(title="Update failed", description=err, color=self.bot.error_color)
+                    embed = discord.Embed(
+                        title="Update failed",
+                        description=err,
+                        color=self.bot.error_color,
+                    )
                     await ctx.send(embed=embed)
 
                 elif res != "Already up to date.":
@@ -2090,14 +2118,14 @@ class Utility(commands.Cog):
         body = utils.cleanup_code(body)
         stdout = StringIO()
 
-        to_compile = f'async def func():\n{indent(body, "  ")}'
+        to_compile = f"async def func():\n{indent(body, '  ')}"
 
         def paginate(text: str):
             """Simple generator that paginates text."""
             last = 0
             pages = []
             appd_index = curr = None
-            for curr in range(0, len(text)):
+            for curr in range(len(text)):
                 if curr % 1980 == 0:
                     pages.append(text[last:curr])
                     last = curr

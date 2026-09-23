@@ -4,26 +4,23 @@ __version__ = "4.2.0"
 import asyncio
 import copy
 import hashlib
-import logging
 import os
+import platform
 import re
 import string
 import struct
 import sys
-import platform
-import typing
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from subprocess import PIPE
 from types import SimpleNamespace
 
 import discord
 import isodate
-from aiohttp import ClientSession, ClientResponseError
+from aiohttp import ClientResponseError, ClientSession
 from discord.ext import commands, tasks
 from discord.ext.commands.view import StringView
 from emoji import is_emoji
 from packaging.version import Version
-
 
 try:
     # noinspection PyUnresolvedReferences
@@ -50,12 +47,12 @@ from core.thread import ThreadManager
 from core.time import human_timedelta
 from core.utils import (
     extract_block_timestamp,
+    extract_forwarded_content,
+    human_join,
     normalize_alias,
     parse_alias,
     truncate,
     tryint,
-    human_join,
-    extract_forwarded_content,
 )
 
 logger = getLogger(__name__)
@@ -100,9 +97,7 @@ class ModmailBot(commands.Bot):
         self.plugin_db = PluginDatabaseClient(self)  # Deprecated
         self.startup()
 
-    def get_guild_icon(
-        self, guild: typing.Optional[discord.Guild], *, size: typing.Optional[int] = None
-    ) -> str:
+    def get_guild_icon(self, guild: discord.Guild | None, *, size: int | None = None) -> str:
         if guild is None:
             guild = self.guild
         if guild.icon is None:
@@ -111,7 +106,7 @@ class ModmailBot(commands.Bot):
             return guild.icon.url
         return guild.icon.with_size(size).url
 
-    def _resolve_snippet(self, name: str) -> typing.Optional[str]:
+    def _resolve_snippet(self, name: str) -> str | None:
         """
         Get actual snippet names from direct aliases to snippets.
 
@@ -301,7 +296,7 @@ class ModmailBot(commands.Bot):
         return await super().is_owner(user)
 
     @property
-    def log_channel(self) -> typing.Optional[discord.TextChannel]:
+    def log_channel(self) -> discord.TextChannel | None:
         channel_id = self.config["log_channel_id"]
         if channel_id is not None:
             try:
@@ -316,7 +311,10 @@ class ModmailBot(commands.Bot):
             try:
                 channel = self.main_category.channels[0]
                 self.config["log_channel_id"] = channel.id
-                logger.warning("No log channel set, setting #%s to be the log channel.", channel.name)
+                logger.warning(
+                    "No log channel set, setting #%s to be the log channel.",
+                    channel.name,
+                )
                 return channel
             except IndexError:
                 pass
@@ -363,15 +361,15 @@ class ModmailBot(commands.Bot):
         await self.config.wait_until_ready()
 
     @property
-    def snippets(self) -> typing.Dict[str, str]:
+    def snippets(self) -> dict[str, str]:
         return self.config["snippets"]
 
     @property
-    def aliases(self) -> typing.Dict[str, str]:
+    def aliases(self) -> dict[str, str]:
         return self.config["aliases"]
 
     @property
-    def auto_triggers(self) -> typing.Dict[str, str]:
+    def auto_triggers(self) -> dict[str, str]:
         return self.config["auto_triggers"]
 
     @property
@@ -383,7 +381,7 @@ class ModmailBot(commands.Bot):
         return token
 
     @property
-    def guild_id(self) -> typing.Optional[int]:
+    def guild_id(self) -> int | None:
         guild_id = self.config["guild_id"]
         if guild_id is not None:
             try:
@@ -396,7 +394,7 @@ class ModmailBot(commands.Bot):
         return None
 
     @property
-    def guild(self) -> typing.Optional[discord.Guild]:
+    def guild(self) -> discord.Guild | None:
         """
         The guild that the bot is serving
         (the server where users message it from)
@@ -404,7 +402,7 @@ class ModmailBot(commands.Bot):
         return discord.utils.get(self.guilds, id=self.guild_id)
 
     @property
-    def modmail_guild(self) -> typing.Optional[discord.Guild]:
+    def modmail_guild(self) -> discord.Guild | None:
         """
         The guild that the bot is operating in
         (where the bot is creating threads)
@@ -427,7 +425,7 @@ class ModmailBot(commands.Bot):
         return self.modmail_guild != self.guild
 
     @property
-    def main_category(self) -> typing.Optional[discord.CategoryChannel]:
+    def main_category(self) -> discord.CategoryChannel | None:
         if self.modmail_guild is not None:
             category_id = self.config["main_category_id"]
             if category_id is not None:
@@ -449,15 +447,15 @@ class ModmailBot(commands.Bot):
         return None
 
     @property
-    def blocked_users(self) -> typing.Dict[str, str]:
+    def blocked_users(self) -> dict[str, str]:
         return self.config["blocked"]
 
     @property
-    def blocked_roles(self) -> typing.Dict[str, str]:
+    def blocked_roles(self) -> dict[str, str]:
         return self.config["blocked_roles"]
 
     @property
-    def blocked_whitelisted_users(self) -> typing.List[str]:
+    def blocked_whitelisted_users(self) -> list[str]:
         return self.config["blocked_whitelist"]
 
     @property
@@ -569,7 +567,11 @@ class ModmailBot(commands.Bot):
                 logger.debug("Closing thread for recipient %s.", recipient_id)
                 after = 0
             else:
-                logger.debug("Thread for recipient %s will be closed after %s seconds.", recipient_id, after)
+                logger.debug(
+                    "Thread for recipient %s will be closed after %s seconds.",
+                    recipient_id,
+                    after,
+                )
 
             thread = await self.threads.find(recipient_id=int(recipient_id))
 
@@ -611,7 +613,10 @@ class ModmailBot(commands.Bot):
                 if log_data:
                     logger.debug("Successfully closed thread with channel %s.", log["channel_id"])
                 else:
-                    logger.debug("Failed to close thread with channel %s, skipping.", log["channel_id"])
+                    logger.debug(
+                        "Failed to close thread with channel %s, skipping.",
+                        log["channel_id"],
+                    )
 
         other_guilds = [guild for guild in self.guilds if guild not in {self.guild, self.modmail_guild}]
         if any(other_guilds):
@@ -649,7 +654,7 @@ class ModmailBot(commands.Bot):
         return self.get_user(id) or await self.fetch_user(id)
 
     @staticmethod
-    async def get_or_fetch_member(guild: discord.Guild, member_id: int) -> typing.Optional[discord.Member]:
+    async def get_or_fetch_member(guild: discord.Guild, member_id: int) -> discord.Member | None:
         """
         Attempt to get a member from cache; on failure fetch from the API.
 
@@ -658,7 +663,7 @@ class ModmailBot(commands.Bot):
         """
         return guild.get_member(member_id) or await guild.fetch_member(member_id)
 
-    async def retrieve_emoji(self) -> typing.Tuple[str, str]:
+    async def retrieve_emoji(self) -> tuple[str, str]:
         sent_emoji = self.config["sent_emoji"]
         blocked_emoji = self.config["blocked_emoji"]
 
@@ -870,7 +875,7 @@ class ModmailBot(commands.Bot):
 
     @staticmethod
     async def add_reaction(
-        msg, reaction: typing.Union[discord.Emoji, discord.Reaction, discord.PartialEmoji, str]
+        msg, reaction: discord.Emoji | discord.Reaction | discord.PartialEmoji | str
     ) -> bool:
         if reaction != "disable":
             try:
@@ -904,7 +909,10 @@ class ModmailBot(commands.Bot):
                             )
                         )
                         return
-                    if self.config["dm_disabled"] in (DMDisabled.NEW_THREADS, DMDisabled.ALL_THREADS):
+                    if self.config["dm_disabled"] in (
+                        DMDisabled.NEW_THREADS,
+                        DMDisabled.ALL_THREADS,
+                    ):
                         embed = discord.Embed(
                             title=self.config["disabled_new_thread_title"],
                             color=self.error_color,
@@ -915,7 +923,8 @@ class ModmailBot(commands.Bot):
                             icon_url=self.get_guild_icon(guild=message.guild, size=128),
                         )
                         logger.info(
-                            "A new thread was blocked from %s due to disabled Modmail.", message.author
+                            "A new thread was blocked from %s due to disabled Modmail.",
+                            message.author,
                         )
                         await self.add_reaction(message, blocked_emoji)
                         return await message.channel.send(embed=embed)
@@ -931,7 +940,10 @@ class ModmailBot(commands.Bot):
                             text=self.config["disabled_current_thread_footer"],
                             icon_url=self.get_guild_icon(guild=message.guild, size=128),
                         )
-                        logger.info("A message was blocked from %s due to disabled Modmail.", message.author)
+                        logger.info(
+                            "A message was blocked from %s due to disabled Modmail.",
+                            message.author,
+                        )
                         await self.add_reaction(message, blocked_emoji)
                         return await message.channel.send(embed=embed)
                 # Extract forwarded content using utility function
@@ -988,7 +1000,10 @@ class ModmailBot(commands.Bot):
                                 )
                             )
                             return
-                        if self.config["dm_disabled"] in (DMDisabled.NEW_THREADS, DMDisabled.ALL_THREADS):
+                        if self.config["dm_disabled"] in (
+                            DMDisabled.NEW_THREADS,
+                            DMDisabled.ALL_THREADS,
+                        ):
                             embed = discord.Embed(
                                 title=self.config["disabled_new_thread_title"],
                                 color=self.error_color,
@@ -999,7 +1014,8 @@ class ModmailBot(commands.Bot):
                                 icon_url=self.get_guild_icon(guild=message.guild, size=128),
                             )
                             logger.info(
-                                "A new thread was blocked from %s due to disabled Modmail.", message.author
+                                "A new thread was blocked from %s due to disabled Modmail.",
+                                message.author,
                             )
                             await self.add_reaction(message, blocked_emoji)
                             return await message.channel.send(embed=embed)
@@ -1016,7 +1032,8 @@ class ModmailBot(commands.Bot):
                                 icon_url=self.get_guild_icon(guild=message.guild, size=128),
                             )
                             logger.info(
-                                "A message was blocked from %s due to disabled Modmail.", message.author
+                                "A message was blocked from %s due to disabled Modmail.",
+                                message.author,
                             )
                             await self.add_reaction(message, blocked_emoji)
                             return await message.channel.send(embed=embed)
@@ -1058,7 +1075,8 @@ class ModmailBot(commands.Bot):
             # Update the DB with the new channel_id after restoration
             if thread.channel:
                 await self.api.logs.update_one(
-                    {"recipient.id": str(thread.id)}, {"$set": {"channel_id": str(thread.channel.id)}}
+                    {"recipient.id": str(thread.id)},
+                    {"$set": {"channel_id": str(thread.channel.id)}},
                 )
         # Re-fetch the thread object to ensure channel is valid
         thread = await self.threads.find(recipient=message.author)
@@ -1075,7 +1093,10 @@ class ModmailBot(commands.Bot):
                 )
                 return
 
-            if self.config["dm_disabled"] in (DMDisabled.NEW_THREADS, DMDisabled.ALL_THREADS):
+            if self.config["dm_disabled"] in (
+                DMDisabled.NEW_THREADS,
+                DMDisabled.ALL_THREADS,
+            ):
                 embed = discord.Embed(
                     title=self.config["disabled_new_thread_title"],
                     color=self.error_color,
@@ -1085,7 +1106,10 @@ class ModmailBot(commands.Bot):
                     text=self.config["disabled_new_thread_footer"],
                     icon_url=self.get_guild_icon(guild=message.guild, size=128),
                 )
-                logger.info("A new thread was blocked from %s due to disabled Modmail.", message.author)
+                logger.info(
+                    "A new thread was blocked from %s due to disabled Modmail.",
+                    message.author,
+                )
                 await self.add_reaction(message, blocked_emoji)
                 return await message.channel.send(embed=embed)
 
@@ -1101,7 +1125,10 @@ class ModmailBot(commands.Bot):
                     text=self.config["disabled_current_thread_footer"],
                     icon_url=self.get_guild_icon(guild=message.guild, size=128),
                 )
-                logger.info("A message was blocked from %s due to disabled Modmail.", message.author)
+                logger.info(
+                    "A message was blocked from %s due to disabled Modmail.",
+                    message.author,
+                )
                 await self.add_reaction(message, blocked_emoji)
                 return await message.channel.send(embed=embed)
 
@@ -1223,7 +1250,12 @@ class ModmailBot(commands.Bot):
             if trigger:
                 invoker = re.search(trigger, message.content).group(0)
         else:
-            trigger = next(filter(lambda x: x.lower() in message.content.lower(), self.auto_triggers.keys()))
+            trigger = next(
+                filter(
+                    lambda x: x.lower() in message.content.lower(),
+                    self.auto_triggers.keys(),
+                )
+            )
             if trigger:
                 invoker = trigger.lower()
 
@@ -1282,9 +1314,7 @@ class ModmailBot(commands.Bot):
 
         return ctx
 
-    async def update_perms(
-        self, name: typing.Union[PermissionLevel, str], value: int, add: bool = True
-    ) -> None:
+    async def update_perms(self, name: PermissionLevel | str, value: int, add: bool = True) -> None:
         if value != -1:
             value = str(value)
         if isinstance(name, PermissionLevel):
@@ -1387,7 +1417,7 @@ class ModmailBot(commands.Bot):
                 ):
                     await thread.reply(message, anonymous=anonymous, plain=plain)
             elif ctx.invoked_with:
-                exc = commands.CommandNotFound('Command "{}" is not found'.format(ctx.invoked_with))
+                exc = commands.CommandNotFound(f'Command "{ctx.invoked_with}" is not found')
                 self.dispatch("command_error", ctx, exc)
 
     async def on_typing(self, channel, user, _):
@@ -1492,7 +1522,7 @@ class ModmailBot(commands.Bot):
                 logger.warning("Failed to find linked message for reactions: %s", e)
                 return
 
-        if self.config["transfer_reactions"] and linked_messages is not [None]:
+        if self.config["transfer_reactions"] and linked_messages != [None]:
             if payload.event_type == "REACTION_ADD":
                 for msg in linked_messages:
                     await self.add_reaction(msg, reaction)
@@ -1525,7 +1555,10 @@ class ModmailBot(commands.Bot):
         await message.remove_reaction(payload.emoji, member)
         await message.add_reaction(emoji_fmt)  # bot adds as well
 
-        if self.config["dm_disabled"] in (DMDisabled.NEW_THREADS, DMDisabled.ALL_THREADS):
+        if self.config["dm_disabled"] in (
+            DMDisabled.NEW_THREADS,
+            DMDisabled.ALL_THREADS,
+        ):
             embed = discord.Embed(
                 title=self.config["disabled_new_thread_title"],
                 color=self.error_color,
@@ -1715,7 +1748,11 @@ class ModmailBot(commands.Bot):
         logger.error("Unexpected exception:", exc_info=sys.exc_info())
 
     async def on_command_error(
-        self, context: commands.Context, exception: Exception, *, unhandled_by_cog: bool = False
+        self,
+        context: commands.Context,
+        exception: Exception,
+        *,
+        unhandled_by_cog: bool = False,
     ) -> None:
         if not unhandled_by_cog:
             command = context.command
@@ -1760,7 +1797,10 @@ class ModmailBot(commands.Bot):
                         )
             logger.warning("CheckFailure: %s", exception)
         elif isinstance(exception, commands.DisabledCommand):
-            logger.info("DisabledCommand: %s is trying to run eval but it's disabled", context.author.name)
+            logger.info(
+                "DisabledCommand: %s is trying to run eval but it's disabled",
+                context.author.name,
+            )
         else:
             logger.error("Unexpected exception:", exc_info=exception)
 
@@ -1792,7 +1832,13 @@ class ModmailBot(commands.Bot):
                 }
             )
         else:
-            data.update({"owner_name": info.owner.name, "owner_id": info.owner.id, "team": False})
+            data.update(
+                {
+                    "owner_name": info.owner.name,
+                    "owner_id": info.owner.id,
+                    "team": False,
+                }
+            )
 
         async with self.session.post("https://api.modmail.dev/metadata", json=data):
             logger.debug("Uploading metadata to Modmail server.")
@@ -1845,7 +1891,7 @@ class ModmailBot(commands.Bot):
                 user = data["user"]
                 embed.add_field(
                     name="Merge Commit",
-                    value=f"[`{short_sha}`]({html_url}) " f"{message} - {user['username']}",
+                    value=f"[`{short_sha}`]({html_url}) {message} - {user['username']}",
                 )
                 embed.set_author(
                     name=user["username"] + " - Updating Bot",
@@ -1892,7 +1938,10 @@ class ModmailBot(commands.Bot):
 
                     logger.info("Bot has been updated.")
                     channel = self.update_channel
-                    if self.hosting_method in (HostingMethod.PM2, HostingMethod.SYSTEMD):
+                    if self.hosting_method in (
+                        HostingMethod.PM2,
+                        HostingMethod.SYSTEMD,
+                    ):
                         embed = discord.Embed(title="Bot has been updated", color=self.main_color)
                         embed.set_footer(
                             text=f"Updating Modmail v{self.version} " f"-> v{latest.version} {message}"
@@ -2035,4 +2084,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

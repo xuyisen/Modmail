@@ -1,20 +1,17 @@
+import _string
 import json
 import logging
 import os
 import re
 import sys
-import _string
-
 from difflib import get_close_matches
 from enum import IntEnum
-from logging import FileHandler, StreamHandler, Handler
+from logging import FileHandler, Handler, StreamHandler
 from logging.handlers import RotatingFileHandler
 from string import Formatter
-from typing import Dict, Optional
 
 import discord
 from discord.ext import commands
-
 
 try:
     from colorama import Fore, Style
@@ -30,15 +27,15 @@ if ".heroku" in os.environ.get("PYTHONHOME", ""):
 class ModmailLogger(logging.Logger):
     @staticmethod
     def _debug_(*msgs):
-        return f'{Fore.CYAN}{" ".join(msgs)}{Style.RESET_ALL}'
+        return f"{Fore.CYAN}{' '.join(msgs)}{Style.RESET_ALL}"
 
     @staticmethod
     def _info_(*msgs):
-        return f'{Fore.LIGHTMAGENTA_EX}{" ".join(msgs)}{Style.RESET_ALL}'
+        return f"{Fore.LIGHTMAGENTA_EX}{' '.join(msgs)}{Style.RESET_ALL}"
 
     @staticmethod
     def _error_(*msgs):
-        return f'{Fore.RED}{" ".join(msgs)}{Style.RESET_ALL}'
+        return f"{Fore.RED}{' '.join(msgs)}{Style.RESET_ALL}"
 
     def debug(self, msg, *args, **kwargs):
         if self.isEnabledFor(logging.DEBUG):
@@ -91,14 +88,14 @@ class JsonFormatter(logging.Formatter):
 
     def __init__(
         self,
-        fmt_dict: Optional[Dict[str, str]] = None,
+        fmt_dict: dict[str, str] | None = None,
         time_format: str = "%Y-%m-%dT%H:%M:%S",
         msec_format: str = "%s.%03dZ",
     ):
-        self.fmt_dict: Dict[str, str] = fmt_dict if fmt_dict is not None else {"message": "message"}
+        self.fmt_dict: dict[str, str] = fmt_dict if fmt_dict is not None else {"message": "message"}
         self.default_time_format: str = time_format
         self.default_msec_format: str = msec_format
-        self.datefmt: Optional[str] = None
+        self.datefmt: str | None = None
 
     def usesTime(self) -> bool:
         """
@@ -106,7 +103,7 @@ class JsonFormatter(logging.Formatter):
         """
         return "asctime" in self.fmt_dict.values()
 
-    def formatMessage(self, record) -> Dict[str, str]:
+    def formatMessage(self, record) -> dict[str, str]:
         """
         Overwritten to return a dictionary of the relevant LogRecord attributes instead of a string.
         KeyError is raised if an unknown attribute is provided in the fmt_dict.
@@ -149,7 +146,8 @@ class FileFormatter(logging.Formatter):
 
 
 log_stream_formatter = logging.Formatter(
-    "%(asctime)s %(name)s[%(lineno)d] - %(levelname)s: %(message)s", datefmt="%m/%d/%y %H:%M:%S"
+    "%(asctime)s %(name)s[%(lineno)d] - %(levelname)s: %(message)s",
+    datefmt="%m/%d/%y %H:%M:%S",
 )
 
 log_file_formatter = FileFormatter(
@@ -172,7 +170,7 @@ json_formatter = JsonFormatter(
 
 
 def create_log_handler(
-    filename: Optional[str] = None,
+    filename: str | None = None,
     *,
     rotating: bool = False,
     level: int = logging.DEBUG,
@@ -231,7 +229,12 @@ def create_log_handler(
         formatter = log_file_formatter
     else:
         handler = RotatingFileHandler(
-            filename, mode=mode, encoding=encoding, maxBytes=maxBytes, backupCount=backupCount, **kwargs
+            filename,
+            mode=mode,
+            encoding=encoding,
+            maxBytes=maxBytes,
+            backupCount=backupCount,
+            **kwargs,
         )
         formatter = log_file_formatter
 
@@ -248,7 +251,7 @@ log_level = logging.INFO
 loggers = set()
 
 ch = create_log_handler(level=log_level)
-ch_debug: Optional[RotatingFileHandler] = None
+ch_debug: RotatingFileHandler | None = None
 
 
 def getLogger(name=None) -> ModmailLogger:
@@ -264,7 +267,10 @@ def getLogger(name=None) -> ModmailLogger:
 def configure_logging(bot) -> None:
     global ch_debug, log_level, ch
 
-    stream_log_format, file_log_format = bot.config["stream_log_format"], bot.config["file_log_format"]
+    stream_log_format, file_log_format = (
+        bot.config["stream_log_format"],
+        bot.config["file_log_format"],
+    )
     if stream_log_format == "json":
         ch.setFormatter(json_formatter)
 
@@ -318,7 +324,10 @@ def configure_logging(bot) -> None:
     non_verbose_log_level = max(d_level, logging.INFO)
     stream_handler = create_log_handler(level=non_verbose_log_level)
     if non_verbose_log_level != d_level:
-        logger.info("Discord logging level (stdout): %s.", logging.getLevelName(non_verbose_log_level))
+        logger.info(
+            "Discord logging level (stdout): %s.",
+            logging.getLevelName(non_verbose_log_level),
+        )
         logger.info("Discord logging level (logfile): %s.", logging.getLevelName(d_level))
     else:
         logger.info("Discord logging level: %s.", logging.getLevelName(d_level))

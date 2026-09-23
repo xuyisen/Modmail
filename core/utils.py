@@ -1,6 +1,6 @@
 import base64
-import functools
 import contextlib
+import functools
 import re
 import typing
 from datetime import datetime, timezone
@@ -14,39 +14,38 @@ from discord.ext import commands
 
 from core.models import getLogger
 
-
 __all__ = [
-    "strtobool",
+    "AcceptButton",
+    "ConfirmThreadCreationView",
+    "DenyButton",
+    "DummyParam",
     "User",
-    "truncate",
-    "format_preview",
-    "is_image_url",
-    "parse_image_url",
-    "human_join",
-    "days",
     "cleanup_code",
-    "parse_channel_topic",
+    "create_not_found_embed",
+    "create_thread_channel",
+    "days",
+    "escape_code_block",
+    "extract_block_timestamp",
+    "extract_forwarded_content",
+    "format_description",
+    "format_preview",
+    "get_joint_id",
+    "get_top_role",
+    "human_join",
+    "is_image_url",
+    "match_other_recipients",
     "match_title",
     "match_user_id",
-    "match_other_recipients",
-    "create_thread_channel",
-    "create_not_found_embed",
-    "parse_alias",
     "normalize_alias",
-    "format_description",
-    "trigger_typing",
-    "safe_typing",
-    "escape_code_block",
-    "tryint",
-    "get_top_role",
-    "get_joint_id",
-    "extract_block_timestamp",
+    "parse_alias",
+    "parse_channel_topic",
+    "parse_image_url",
     "return_or_truncate",
-    "AcceptButton",
-    "DenyButton",
-    "ConfirmThreadCreationView",
-    "DummyParam",
-    "extract_forwarded_content",
+    "safe_typing",
+    "strtobool",
+    "trigger_typing",
+    "truncate",
+    "tryint",
 ]
 
 
@@ -85,7 +84,7 @@ class User(commands.MemberConverter):
             pass
         match = self._get_id_match(argument)
         if match is None:
-            raise commands.BadArgument('User "{}" not found'.format(argument))
+            raise commands.BadArgument(f'User "{argument}" not found')
         return discord.Object(int(match.group(1)))
 
 
@@ -110,7 +109,7 @@ def truncate(text: str, max: int = 50) -> str:  # pylint: disable=redefined-buil
     return text[: max - 3].strip() + "..." if len(text) > max else text
 
 
-def format_preview(messages: typing.List[typing.Dict[str, typing.Any]]):
+def format_preview(messages: list[dict[str, typing.Any]]):
     """
     Used to format previews.
 
@@ -211,7 +210,7 @@ def human_join(seq: typing.Sequence[str], delim: str = ", ", final: str = "or") 
     return delim.join(seq[:-1]) + f" {final} {seq[-1]}"
 
 
-def days(day: typing.Union[str, int]) -> str:
+def days(day: str | int) -> str:
     """
     Humanize the number of days.
 
@@ -262,7 +261,7 @@ TOPIC_REGEX = re.compile(
 UID_REGEX = re.compile(r"\bUser ID:\s*(\d{17,21})\b", flags=re.IGNORECASE)
 
 
-def parse_channel_topic(text: str) -> typing.Tuple[typing.Optional[str], int, typing.List[int]]:
+def parse_channel_topic(text: str) -> tuple[str | None, int, list[int]]:
     """
     A helper to parse channel topics and respectivefully returns all the required values
     at once.
@@ -343,7 +342,7 @@ def match_user_id(text: str, any_string: bool = False) -> int:
     return user_id
 
 
-def match_other_recipients(text: str) -> typing.List[int]:
+def match_other_recipients(text: str) -> list[int]:
     """
     Matches a title in the format of "Other Recipients: XXXX,XXXX"
 
@@ -363,7 +362,8 @@ def match_other_recipients(text: str) -> typing.List[int]:
 def create_not_found_embed(word, possibilities, name, n=2, cutoff=0.6) -> discord.Embed:
     # Single reference of Color.red()
     embed = discord.Embed(
-        color=discord.Color.red(), description=f"**{name.capitalize()} `{word}` cannot be found.**"
+        color=discord.Color.red(),
+        description=f"**{name.capitalize()} `{word}` cannot be found.**",
     )
     val = get_close_matches(word, possibilities, n=n, cutoff=cutoff)
     if val:
@@ -539,7 +539,7 @@ async def create_thread_channel(bot, recipient, category, overwrites, *, name=No
     return channel
 
 
-def get_joint_id(message: discord.Message) -> typing.Optional[int]:
+def get_joint_id(message: discord.Message) -> int | None:
     """
     Get the joint ID from `discord.Embed().author.url`.
     Parameters
@@ -642,7 +642,7 @@ class ConfirmThreadCreationView(discord.ui.View):
         self.value = None
 
 
-def extract_forwarded_content(message) -> typing.Optional[str]:
+def extract_forwarded_content(message) -> str | None:
     """
     Extract forwarded message content from Discord forwarded messages.
 
